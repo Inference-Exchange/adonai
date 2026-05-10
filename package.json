@@ -1,0 +1,19 @@
+{
+  "name": "adonai",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "init": "bun run apps/tui/src/index.ts",
+    "init:check": "bun run apps/tui/src/index.ts --check",
+    "tui": "bun run apps/tui/src/index.ts --dashboard",
+    "tui:check": "bun run apps/tui/src/index.ts --dashboard --check",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.2.6"
+  }
+}
