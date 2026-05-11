@@ -69,6 +69,16 @@ bun run init:check
 
 Early testers should start with [docs/early-testing.md](docs/early-testing.md). It explains what to test, expected behavior, and current gaps.
 
+## Release Builds
+
+Tagged releases publish draft GitHub releases with supervisor binaries for:
+
+- `x86_64-unknown-linux-gnu`
+- `aarch64-apple-darwin`
+- `x86_64-apple-darwin`
+
+Release artifacts include SHA-256 checksum files. Draft releases should be verified before publishing.
+
 ## API
 
 - `GET /health`
