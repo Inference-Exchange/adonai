@@ -9,7 +9,7 @@ Adonai is the agent OS for owned compute. The alpha should prove one thing first
 - Inspect hardware and network exposure.
 - Probe installed inference engines: Ollama, llama.cpp, MLX, vLLM, and SGLang.
 - Ask Adonai to plan a model run for `llama3.2:3b`.
-- Execute a deterministic proof agent through the supervisor.
+- Execute a real local Ollama proof agent when `llama3.2:3b` is ready, or an explicit deterministic supervisor smoke run when it is not.
 - Confirm runs persist in SQLite.
 
 ## Requirements
@@ -19,7 +19,7 @@ Adonai is the agent OS for owned compute. The alpha should prove one thing first
 - Bun.
 - Optional: Ollama, llama.cpp, MLX, vLLM, or SGLang installed on your `PATH`.
 
-Adonai does not install inference engines yet. The current build detects them honestly and explains what is missing.
+Adonai does not install inference engines or download models yet. The current build detects them honestly and explains what is missing.
 
 ## Install From Source
 
@@ -56,9 +56,18 @@ The init flow should show:
 - loopback-only privacy state,
 - engine recommendation for the requested model,
 - whether the model is runnable now,
+- installed Ollama model names when Ollama is available,
 - missing runtime pieces,
 - one proof agent run,
 - recent persisted runs.
+
+If Ollama is installed but `llama3.2:3b` is missing, the model plan should say it is not runnable and include:
+
+```sh
+ollama pull llama3.2:3b
+```
+
+If Ollama's local API is unavailable, the proof run should use `mock/test-model` and label itself as a supervisor smoke run. That is expected; Adonai should not pretend local inference worked.
 
 The run database lives at:
 
@@ -91,7 +100,6 @@ curl -sS http://127.0.0.1:49231/v1/models/plan \
 - No Raspberry Pi image.
 - No automatic inference-engine install.
 - No automatic model download.
-- No live model execution through the init flow.
 - No multi-step crash-resumable ReAct loop.
 - No MCP server lifecycle.
 - No Inference Exchange cloud failover.

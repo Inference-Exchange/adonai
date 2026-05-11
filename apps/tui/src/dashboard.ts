@@ -58,7 +58,7 @@ export function dashboardLines(model: DashboardModel): string[] {
     "Engines",
     ...snapshot.engines.engines.map(
       (engine) =>
-        `${engine.adapter_id}: ${engine.health} (${engine.provenance.binary_path ?? "not found"})`,
+        `${engine.adapter_id}: ${engine.health} (${engine.provenance.binary_path ?? "not found"})${formatInstalledModels(engine.installed_models)}`,
     ),
     "",
     "Engine recommendations",
@@ -79,6 +79,7 @@ export function dashboardLines(model: DashboardModel): string[] {
     "",
     "Agent run smoke",
     `${agentRun.id}: ${agentRun.status}`,
+    `Provider: ${agentRun.provider ?? "pending"}/${agentRun.model ?? "pending"}`,
     agentRun.final_message?.content ?? agentRun.error ?? "No final message yet",
     "",
     "Recent runs",
@@ -101,4 +102,15 @@ function formatRuns(runs: AgentRunRecord[]): string[] {
 
 function bytesToGb(bytes: number): string {
   return (bytes / 1024 / 1024 / 1024).toFixed(1)
+}
+
+function formatInstalledModels(models: Array<{ name: string }>): string {
+  if (models.length === 0) {
+    return ""
+  }
+
+  return ` - models: ${models
+    .slice(0, 3)
+    .map((model) => model.name)
+    .join(", ")}`
 }

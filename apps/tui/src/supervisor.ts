@@ -57,6 +57,9 @@ export type EngineProbe = {
       name: string
       supported: boolean
     }>
+    installed_models: Array<{
+      name: string
+    }>
     provenance: {
       binary_path: string | null
       version: string | null

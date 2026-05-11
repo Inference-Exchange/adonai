@@ -5,8 +5,8 @@ pub mod policy;
 pub mod supervisor;
 
 pub use engines::{
-    EngineAdapterId, EngineCapability, EngineHealth, EngineKind, EngineProbe, EngineProvenance,
-    EngineRecommendation, EngineRecommendationLevel, EngineStatus,
+    EngineAdapterId, EngineCapability, EngineHealth, EngineInstalledModel, EngineKind, EngineProbe,
+    EngineProvenance, EngineRecommendation, EngineRecommendationLevel, EngineStatus,
 };
 pub use hardware::{
     Accelerator, AcceleratorKind, HardwareProfile, HostPlatform, MemoryProfile, NetworkProfile,

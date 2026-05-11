@@ -25,8 +25,9 @@ Adonai exists to make that complexity disappear for users without hiding it from
 - Local-only supervisor API on `127.0.0.1`.
 - Hardware profile for OS, CPU, memory, storage, network exposure, and Apple Metal hints.
 - Engine adapter detection for Ollama, llama.cpp, MLX, vLLM, and SGLang.
+- Ollama readiness detection for binary, local API availability, and installed model names.
 - Model planning through `POST /v1/models/plan`.
-- OpenTUI init flow that scans, explains, plans, and runs a proof agent.
+- OpenTUI init flow that scans, explains, plans, and runs a real local proof agent when the planned Ollama model is ready.
 - SQLite-backed run history at `~/.adonai/state/runs.db`.
 
 ## Quickstart
@@ -95,6 +96,14 @@ Chat providers:
 - `mock` for deterministic runtime tests.
 - `ollama` for a local Ollama server at `http://127.0.0.1:11434`.
 
+The init flow uses `llama3.2:3b` by default. Override this with:
+
+```sh
+ADONAI_STARTER_MODEL=qwen2.5:7b bun run init
+```
+
+If Ollama is installed but the starter model is missing, Adonai reports the model as not runnable and tells you which `ollama pull` command is required. If Ollama's local API is unavailable, Adonai falls back to a deterministic supervisor smoke run instead of pretending local inference worked.
+
 ## Architecture
 
 - `adonai-core`: hardware, engine, endpoint policy, model planning, and supervisor contracts.
@@ -110,7 +119,6 @@ The supervisor is the durable product boundary. The Mac app, menu bar, Linux ser
 - No launchd or systemd installer.
 - No automatic inference-engine install.
 - No automatic model download.
-- No live model execution through the init flow.
 - No durable multi-step ReAct loop yet.
 - No MCP server lifecycle yet.
 - No Raspberry Pi image.

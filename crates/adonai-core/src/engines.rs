@@ -35,11 +35,17 @@ pub struct EngineProvenance {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EngineInstalledModel {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EngineStatus {
     pub adapter_id: EngineAdapterId,
     pub kind: EngineKind,
     pub health: EngineHealth,
     pub capabilities: Vec<EngineCapability>,
+    pub installed_models: Vec<EngineInstalledModel>,
     pub provenance: EngineProvenance,
 }
 
@@ -80,10 +86,11 @@ pub fn probe_engines() -> EngineProbe {
 
 fn probe_ollama() -> EngineStatus {
     let binary_path = find_binary("ollama");
-    let health = if binary_path.is_some() {
-        EngineHealth::Available
-    } else {
-        EngineHealth::BinaryMissing
+    let model_probe = binary_path.as_deref().map(list_ollama_models);
+    let (health, installed_models) = match model_probe {
+        None => (EngineHealth::BinaryMissing, Vec::new()),
+        Some(Ok(models)) => (EngineHealth::Available, models),
+        Some(Err(())) => (EngineHealth::ApiUnavailable, Vec::new()),
     };
 
     EngineStatus {
@@ -100,10 +107,12 @@ fn probe_ollama() -> EngineStatus {
                 supported: binary_path.is_some(),
             },
         ],
+        installed_models,
         provenance: EngineProvenance {
             binary_path,
             version: command_version("ollama", &["--version"]),
-            source: "PATH lookup; no engine binary is bundled by Adonai".to_owned(),
+            source: "PATH lookup plus `ollama list`; no engine binary is bundled by Adonai"
+                .to_owned(),
         },
     }
 }
@@ -130,6 +139,7 @@ fn probe_llama_cpp() -> EngineStatus {
                 supported: false,
             },
         ],
+        installed_models: Vec::new(),
         provenance: EngineProvenance {
             binary_path,
             version: command_version("llama-server", &["--version"])
@@ -162,6 +172,7 @@ fn probe_mlx() -> EngineStatus {
                 supported: false,
             },
         ],
+        installed_models: Vec::new(),
         provenance: EngineProvenance {
             binary_path,
             version: command_version("mlx-lm", &["--version"])
@@ -197,6 +208,7 @@ fn probe_vllm() -> EngineStatus {
                 supported: binary_path.is_some(),
             },
         ],
+        installed_models: Vec::new(),
         provenance: EngineProvenance {
             binary_path,
             version: command_version("vllm", &["--version"]),
@@ -227,6 +239,7 @@ fn probe_sglang() -> EngineStatus {
                 supported: false,
             },
         ],
+        installed_models: Vec::new(),
         provenance: EngineProvenance {
             binary_path,
             version: command_version("python", &["-m", "sglang.launch_server", "--version"]),
@@ -328,6 +341,28 @@ fn command_version(binary: &str, args: &[&str]) -> Option<String> {
     }
 }
 
+fn list_ollama_models(binary: &str) -> Result<Vec<EngineInstalledModel>, ()> {
+    let output = Command::new(binary).arg("list").output().map_err(|_| ())?;
+    if !output.status.success() {
+        return Err(());
+    }
+
+    let stdout = String::from_utf8(output.stdout).map_err(|_| ())?;
+    Ok(parse_ollama_list(&stdout))
+}
+
+fn parse_ollama_list(stdout: &str) -> Vec<EngineInstalledModel> {
+    stdout
+        .lines()
+        .skip(1)
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|name| !name.trim().is_empty())
+        .map(|name| EngineInstalledModel {
+            name: name.to_owned(),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,5 +387,24 @@ mod tests {
             ]
         );
         assert_eq!(probe.recommendations.len(), probe.engines.len());
+    }
+
+    #[test]
+    fn parses_ollama_list_models() {
+        let models = parse_ollama_list(
+            "NAME                ID              SIZE      MODIFIED\nllama3.2:3b         abc123          2.0 GB    2 hours ago\nqwen2.5:7b          def456          4.7 GB    1 day ago\n",
+        );
+
+        assert_eq!(
+            models,
+            vec![
+                EngineInstalledModel {
+                    name: "llama3.2:3b".to_owned()
+                },
+                EngineInstalledModel {
+                    name: "qwen2.5:7b".to_owned()
+                }
+            ]
+        );
     }
 }

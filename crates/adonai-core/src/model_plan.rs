@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{EngineAdapterId, EngineHealth, EngineProbe, HardwareProfile, hardware::scan_hardware};
+use crate::{
+    EngineAdapterId, EngineHealth, EngineKind, EngineProbe, EngineStatus, HardwareProfile,
+    hardware::scan_hardware,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelPlanRequest {
@@ -90,15 +93,30 @@ pub fn plan_model_run_with_hardware(
         .iter()
         .find(|engine| engine.adapter_id.0 == preferred);
 
-    let runnable_now = preferred_status
-        .is_some_and(|engine| engine.health == EngineHealth::Available)
-        && adapter_is_implemented(preferred);
+    let runnable_now = preferred_status.is_some_and(|engine| {
+        engine.health == EngineHealth::Available
+            && adapter_is_implemented(preferred)
+            && model_is_available_now(&request.model, &artifact, engine)
+    });
 
     if runnable_now {
         reasons.push(format!(
             "{preferred} is installed and supports the inferred model path."
         ));
     } else {
+        if let Some(engine) = preferred_status {
+            if engine.health == EngineHealth::ApiUnavailable {
+                missing.push(format!(
+                    "{preferred} is installed but its local API is unavailable."
+                ));
+            }
+            if is_missing_ollama_model(&request.model, &artifact, engine) {
+                missing.push(format!(
+                    "Ollama model `{}` is not installed. Run `ollama pull {}`.",
+                    request.model, request.model
+                ));
+            }
+        }
         missing.push(format!(
             "{preferred} is not ready as an Adonai execution adapter."
         ));
@@ -150,6 +168,26 @@ pub fn plan_model_run_with_hardware(
 
 fn adapter_is_implemented(adapter_id: &str) -> bool {
     matches!(adapter_id, "ollama.local")
+}
+
+fn model_is_available_now(model: &str, artifact: &ModelArtifact, engine: &EngineStatus) -> bool {
+    match (&engine.kind, artifact) {
+        (EngineKind::Ollama, ModelArtifact::OllamaModel) => engine
+            .installed_models
+            .iter()
+            .any(|installed| installed.name == model),
+        _ => true,
+    }
+}
+
+fn is_missing_ollama_model(model: &str, artifact: &ModelArtifact, engine: &EngineStatus) -> bool {
+    engine.kind == EngineKind::Ollama
+        && matches!(artifact, ModelArtifact::OllamaModel)
+        && engine.health == EngineHealth::Available
+        && !engine
+            .installed_models
+            .iter()
+            .any(|installed| installed.name == model)
 }
 
 fn infer_source(model: &str) -> ModelSource {
@@ -216,8 +254,8 @@ fn is_apple_silicon(hardware: &HardwareProfile) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        EngineCapability, EngineKind, EngineProvenance, EngineStatus, HostPlatform, MemoryProfile,
-        NetworkProfile,
+        EngineCapability, EngineInstalledModel, EngineKind, EngineProvenance, EngineStatus,
+        HostPlatform, MemoryProfile, NetworkProfile,
     };
 
     #[test]
@@ -229,10 +267,11 @@ mod tests {
                 artifact: None,
             },
             &EngineProbe {
-                engines: vec![engine(
+                engines: vec![engine_with_models(
                     "ollama.local",
                     EngineKind::Ollama,
                     EngineHealth::Available,
+                    vec!["llama3.2:3b"],
                 )],
                 recommendations: Vec::new(),
             },
@@ -245,6 +284,34 @@ mod tests {
         );
         assert!(plan.runnable_now);
         assert_eq!(plan.artifact, ModelArtifact::OllamaModel);
+    }
+
+    #[test]
+    fn marks_ollama_model_missing_when_binary_is_ready_but_model_is_not_pulled() {
+        let plan = plan_model_run_with_hardware(
+            ModelPlanRequest {
+                model: "llama3.2:3b".to_owned(),
+                source: None,
+                artifact: None,
+            },
+            &EngineProbe {
+                engines: vec![engine_with_models(
+                    "ollama.local",
+                    EngineKind::Ollama,
+                    EngineHealth::Available,
+                    vec!["qwen2.5:7b"],
+                )],
+                recommendations: Vec::new(),
+            },
+            &apple_silicon_8gb(),
+        );
+
+        assert!(!plan.runnable_now);
+        assert!(
+            plan.missing
+                .iter()
+                .any(|item| item.contains("ollama pull llama3.2:3b"))
+        );
     }
 
     #[test]
@@ -283,12 +350,29 @@ mod tests {
                 name: "test".to_owned(),
                 supported: true,
             }],
+            installed_models: Vec::new(),
             provenance: EngineProvenance {
                 binary_path: None,
                 version: None,
                 source: "test".to_owned(),
             },
         }
+    }
+
+    fn engine_with_models(
+        adapter_id: &str,
+        kind: EngineKind,
+        health: EngineHealth,
+        models: Vec<&str>,
+    ) -> EngineStatus {
+        let mut engine = engine(adapter_id, kind, health);
+        engine.installed_models = models
+            .into_iter()
+            .map(|name| EngineInstalledModel {
+                name: name.to_owned(),
+            })
+            .collect();
+        engine
     }
 
     fn apple_silicon_8gb() -> HardwareProfile {
