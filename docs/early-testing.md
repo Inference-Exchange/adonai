@@ -61,13 +61,13 @@ The init flow should show:
 - one proof agent run,
 - recent persisted runs.
 
-If Ollama is installed but `llama3.2:3b` is missing, the model plan should say it is not runnable and include:
+If Ollama is installed but `llama3.2:3b` is missing, the model plan should say it is not runnable and include this next action:
 
 ```sh
 ollama pull llama3.2:3b
 ```
 
-If Ollama's local API is unavailable, the proof run should use `mock/test-model` and label itself as a supervisor smoke run. That is expected; Adonai should not pretend local inference worked.
+If Ollama's local API is unavailable, the model plan should show `ollama serve` as the next action. The proof run should use `mock/test-model` and label itself as a supervisor smoke run. That is expected; Adonai should not pretend local inference worked.
 
 The run database lives at:
 

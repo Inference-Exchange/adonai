@@ -102,7 +102,7 @@ The init flow uses `llama3.2:3b` by default. Override this with:
 ADONAI_STARTER_MODEL=qwen2.5:7b bun run init
 ```
 
-If Ollama is installed but the starter model is missing, Adonai reports the model as not runnable and tells you which `ollama pull` command is required. If Ollama's local API is unavailable, Adonai falls back to a deterministic supervisor smoke run instead of pretending local inference worked.
+If Ollama is installed but the starter model is missing, Adonai reports the model as not runnable and shows the required `ollama pull` next action. If Ollama's local API is unavailable, Adonai shows `ollama serve` as the next action and falls back to a deterministic supervisor smoke run instead of pretending local inference worked.
 
 ## Architecture
 

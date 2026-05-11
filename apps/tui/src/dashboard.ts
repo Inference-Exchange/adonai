@@ -73,6 +73,7 @@ export function dashboardLines(model: DashboardModel): string[] {
     ...modelPlan.reasons.slice(0, 2),
     ...modelPlan.missing.slice(0, 2).map((item) => `Missing: ${item}`),
     ...modelPlan.warnings.slice(0, 2).map((item) => `Warning: ${item}`),
+    ...modelPlan.next_actions.slice(0, 2).map((action) => `Next: ${formatAction(action)}`),
     "",
     "Chat provider smoke",
     `${chat.provider}/${chat.model}: ${chat.message.content}`,
@@ -113,4 +114,12 @@ function formatInstalledModels(models: Array<{ name: string }>): string {
     .slice(0, 3)
     .map((model) => model.name)
     .join(", ")}`
+}
+
+function formatAction(action: ModelRunPlan["next_actions"][number]): string {
+  if (action.command) {
+    return `${action.label} - ${action.command}`
+  }
+
+  return `${action.label} - ${action.reason}`
 }

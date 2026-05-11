@@ -141,6 +141,12 @@ export type ModelRunPlan = {
   reasons: string[]
   missing: string[]
   warnings: string[]
+  next_actions: Array<{
+    kind: "install-engine" | "start-engine" | "pull-model" | "select-supported-model"
+    label: string
+    command: string | null
+    reason: string
+  }>
 }
 
 export type RunStatus = "running" | "succeeded" | "failed"

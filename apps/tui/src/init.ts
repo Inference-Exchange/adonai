@@ -49,6 +49,7 @@ export function initLines(model: InitModel): string[] {
     ...prefix(modelPlan.reasons.slice(0, 3), "- "),
     ...prefix(modelPlan.missing.slice(0, 3), "- Missing: "),
     ...prefix(modelPlan.warnings.slice(0, 3), "- Warning: "),
+    ...nextActionLines(modelPlan),
     "",
     "Proof run",
     `${agentRun.id}: ${agentRun.status}`,
@@ -89,4 +90,22 @@ function prefix(items: string[], prefixText: string): string[] {
 
 function bytesToGb(bytes: number): string {
   return (bytes / 1024 / 1024 / 1024).toFixed(1)
+}
+
+function nextActionLines(modelPlan: ModelRunPlan): string[] {
+  if (modelPlan.next_actions.length === 0) {
+    return []
+  }
+
+  return [
+    "",
+    "Next action",
+    ...modelPlan.next_actions.slice(0, 3).map((action) => {
+      if (action.command) {
+        return `- ${action.label}: ${action.command}`
+      }
+
+      return `- ${action.label}: ${action.reason}`
+    }),
+  ]
 }

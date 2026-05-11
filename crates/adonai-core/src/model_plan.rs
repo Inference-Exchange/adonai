@@ -42,6 +42,23 @@ pub enum ModelMemoryClass {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ModelPlanActionKind {
+    InstallEngine,
+    StartEngine,
+    PullModel,
+    SelectSupportedModel,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelPlanAction {
+    pub kind: ModelPlanActionKind,
+    pub label: String,
+    pub command: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelRunPlan {
     pub model: String,
     pub source: ModelSource,
@@ -52,6 +69,7 @@ pub struct ModelRunPlan {
     pub reasons: Vec<String>,
     pub missing: Vec<String>,
     pub warnings: Vec<String>,
+    pub next_actions: Vec<ModelPlanAction>,
 }
 
 pub fn plan_model_run(request: ModelPlanRequest, engines: &EngineProbe) -> ModelRunPlan {
@@ -76,6 +94,7 @@ pub fn plan_model_run_with_hardware(
     let mut reasons = Vec::new();
     let mut missing = Vec::new();
     let mut warnings = Vec::new();
+    let mut next_actions = Vec::new();
 
     let preferred = match (&source, &artifact) {
         (ModelSource::Ollama, _) | (_, ModelArtifact::OllamaModel) => "ollama.local",
@@ -109,12 +128,34 @@ pub fn plan_model_run_with_hardware(
                 missing.push(format!(
                     "{preferred} is installed but its local API is unavailable."
                 ));
+                next_actions.push(ModelPlanAction {
+                    kind: ModelPlanActionKind::StartEngine,
+                    label: "Start Ollama".to_owned(),
+                    command: Some("ollama serve".to_owned()),
+                    reason: "Adonai can only run Ollama models after the local Ollama API is accepting requests.".to_owned(),
+                });
+            }
+            if engine.health == EngineHealth::BinaryMissing {
+                next_actions.push(ModelPlanAction {
+                    kind: ModelPlanActionKind::InstallEngine,
+                    label: "Install Ollama".to_owned(),
+                    command: None,
+                    reason: "Adonai does not install inference engines yet; install Ollama, then refresh the init flow.".to_owned(),
+                });
             }
             if is_missing_ollama_model(&request.model, &artifact, engine) {
                 missing.push(format!(
                     "Ollama model `{}` is not installed. Run `ollama pull {}`.",
                     request.model, request.model
                 ));
+                next_actions.push(ModelPlanAction {
+                    kind: ModelPlanActionKind::PullModel,
+                    label: format!("Pull {}", request.model),
+                    command: Some(format!("ollama pull {}", request.model)),
+                    reason:
+                        "The selected starter model must exist locally before Adonai can run it."
+                            .to_owned(),
+                });
             }
         }
         missing.push(format!(
@@ -128,6 +169,14 @@ pub fn plan_model_run_with_hardware(
                 "GGUF is best routed to llama.cpp because it owns that local file format."
                     .to_owned(),
             );
+            if preferred == "llama-cpp.local" {
+                next_actions.push(ModelPlanAction {
+                    kind: ModelPlanActionKind::SelectSupportedModel,
+                    label: "Use an Ollama starter model".to_owned(),
+                    command: Some("ADONAI_STARTER_MODEL=llama3.2:3b bun run init".to_owned()),
+                    reason: "llama.cpp process management is not implemented yet; Ollama is the current first-run execution path.".to_owned(),
+                });
+            }
         }
         ModelArtifact::Safetensors => {
             reasons.push("Safetensors/Hugging Face artifacts require an engine that understands model architecture, tokenizer, and weight loading.".to_owned());
@@ -163,6 +212,7 @@ pub fn plan_model_run_with_hardware(
         reasons,
         missing,
         warnings,
+        next_actions,
     }
 }
 
@@ -284,6 +334,7 @@ mod tests {
         );
         assert!(plan.runnable_now);
         assert_eq!(plan.artifact, ModelArtifact::OllamaModel);
+        assert!(plan.next_actions.is_empty());
     }
 
     #[test]
@@ -312,6 +363,36 @@ mod tests {
                 .iter()
                 .any(|item| item.contains("ollama pull llama3.2:3b"))
         );
+        assert!(plan.next_actions.iter().any(|action| {
+            action.kind == ModelPlanActionKind::PullModel
+                && action.command.as_deref() == Some("ollama pull llama3.2:3b")
+        }));
+    }
+
+    #[test]
+    fn adds_start_action_when_ollama_api_is_unavailable() {
+        let plan = plan_model_run_with_hardware(
+            ModelPlanRequest {
+                model: "llama3.2:3b".to_owned(),
+                source: None,
+                artifact: None,
+            },
+            &EngineProbe {
+                engines: vec![engine(
+                    "ollama.local",
+                    EngineKind::Ollama,
+                    EngineHealth::ApiUnavailable,
+                )],
+                recommendations: Vec::new(),
+            },
+            &apple_silicon_8gb(),
+        );
+
+        assert!(!plan.runnable_now);
+        assert!(plan.next_actions.iter().any(|action| {
+            action.kind == ModelPlanActionKind::StartEngine
+                && action.command.as_deref() == Some("ollama serve")
+        }));
     }
 
     #[test]
@@ -339,6 +420,13 @@ mod tests {
         );
         assert!(!plan.runnable_now);
         assert_eq!(plan.artifact, ModelArtifact::Gguf);
+        assert!(plan.next_actions.iter().any(|action| {
+            action.kind == ModelPlanActionKind::SelectSupportedModel
+                && action
+                    .command
+                    .as_deref()
+                    .is_some_and(|command| command.contains("ADONAI_STARTER_MODEL"))
+        }));
     }
 
     fn engine(adapter_id: &str, kind: EngineKind, health: EngineHealth) -> EngineStatus {

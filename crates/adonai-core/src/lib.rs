@@ -13,7 +13,8 @@ pub use hardware::{
     StorageProfile,
 };
 pub use model_plan::{
-    ModelArtifact, ModelMemoryClass, ModelPlanRequest, ModelRunPlan, ModelSource, plan_model_run,
+    ModelArtifact, ModelMemoryClass, ModelPlanAction, ModelPlanActionKind, ModelPlanRequest,
+    ModelRunPlan, ModelSource, plan_model_run,
 };
 pub use policy::{BindAddress, EndpointExposure, EndpointPolicy};
 pub use supervisor::{SupervisorSnapshot, SupervisorState};
