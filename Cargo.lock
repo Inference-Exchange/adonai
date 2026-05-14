@@ -18,6 +18,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "adonai-cli"
+version = "0.1.0"
+dependencies = [
+ "adonai-agent",
+ "adonai-core",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "adonai-core"
 version = "0.1.0"
 dependencies = [

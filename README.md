@@ -4,7 +4,7 @@ The agent OS for owned compute.
 
 Adonai is an open-source operating layer for running models and sovereign agents on hardware you own. It is not another chat app, model registry, or thin Ollama wrapper. The bet is that local inference should feel like an operating system: clear hardware status, honest model planning, safe local defaults, durable agents, and engine complexity hidden behind a supervisor.
 
-The current alpha is the foundation: a Rust supervisor, a local-only control API, an OpenTUI onboarding flow, hardware and inference-engine detection, model planning, and persisted agent smoke runs.
+The current alpha is the foundation: a Rust `adonai` CLI, a local-only supervisor API, an OpenTUI onboarding flow, hardware and inference-engine detection, model planning, and persisted agent runs.
 
 ## Why Adonai Exists
 
@@ -23,6 +23,7 @@ Adonai exists to make that complexity disappear for users without hiding it from
 ## What Works Today
 
 - Local-only supervisor API on `127.0.0.1`.
+- Rust CLI entrypoint with `adonai up`, `adonai status`, `adonai doctor`, `adonai prepare`, `adonai run proof`, and `adonai report`.
 - Hardware profile for OS, CPU, memory, storage, network exposure, and Apple Metal hints.
 - Engine adapter detection for Ollama, llama.cpp, MLX, vLLM, and SGLang.
 - Ollama readiness detection for binary, local API availability, and installed model names.
@@ -31,6 +32,14 @@ Adonai exists to make that complexity disappear for users without hiding it from
 - SQLite-backed run history at `~/.adonai/state/runs.db`.
 
 ## Quickstart
+
+From a release artifact:
+
+```sh
+adonai up
+```
+
+From source:
 
 Requirements:
 
@@ -47,7 +56,16 @@ bun install
 cargo run -p adonai-supervisor
 ```
 
-The supervisor binds to `127.0.0.1:49231` by default.
+For the terminal-first CLI:
+
+```sh
+cargo run -p adonai-cli -- up
+cargo run -p adonai-cli -- doctor
+cargo run -p adonai-cli -- run proof
+cargo run -p adonai-cli -- report
+```
+
+The supervisor binds to `127.0.0.1:49231` by default when you run it directly.
 
 In another terminal:
 
@@ -67,11 +85,11 @@ For a non-interactive smoke check:
 bun run init:check
 ```
 
-Early testers should start with [docs/early-testing.md](docs/early-testing.md). It explains what to test, expected behavior, and current gaps.
+Early testers should start with [docs/install.md](docs/install.md) and [docs/early-testing.md](docs/early-testing.md). They explain what to install, test, and report.
 
 ## Release Builds
 
-Tagged releases publish draft GitHub releases with supervisor binaries for:
+Tagged releases publish draft GitHub releases with the `adonai` CLI and `adonai-supervisor` binaries for:
 
 - `x86_64-unknown-linux-gnu`
 - `aarch64-apple-darwin`
@@ -118,6 +136,7 @@ If Ollama is installed but the starter model is missing, Adonai reports the mode
 
 - `adonai-core`: hardware, engine, endpoint policy, model planning, and supervisor contracts.
 - `adonai-agent`: agent definitions, chat providers, one-shot runtime entrypoint, and persisted run state.
+- `adonai-cli`: public terminal OS entrypoint.
 - `adonai-supervisor`: local daemon and HTTP API.
 - `apps/tui`: OpenTUI init flow and operator dashboard.
 

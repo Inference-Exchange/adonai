@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/adonai-agent",
+  "crates/adonai-cli",
   "crates/adonai-core",
   "crates/adonai-supervisor",
 ]

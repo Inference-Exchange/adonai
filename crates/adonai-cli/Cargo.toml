@@ -1,0 +1,15 @@
+[package]
+name = "adonai-cli"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "adonai"
+path = "src/main.rs"
+
+[dependencies]
+adonai-agent = { path = "../adonai-agent" }
+adonai-core = { path = "../adonai-core" }
+thiserror.workspace = true
+tokio.workspace = true

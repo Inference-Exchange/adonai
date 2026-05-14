@@ -22,13 +22,13 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            archive: adonai-supervisor-x86_64-unknown-linux-gnu.tar.gz
+            archive: adonai-x86_64-unknown-linux-gnu.tar.gz
           - os: macos-15
             target: aarch64-apple-darwin
-            archive: adonai-supervisor-aarch64-apple-darwin.tar.gz
+            archive: adonai-aarch64-apple-darwin.tar.gz
           - os: macos-15-intel
             target: x86_64-apple-darwin
-            archive: adonai-supervisor-x86_64-apple-darwin.tar.gz
+            archive: adonai-x86_64-apple-darwin.tar.gz
 
     steps:
       - name: Checkout
@@ -40,18 +40,20 @@ jobs:
           rustup default stable
           rustup target add ${{ matrix.target }}
 
-      - name: Build supervisor
-        run: cargo build --release -p adonai-supervisor --target ${{ matrix.target }}
+      - name: Build binaries
+        run: cargo build --release -p adonai-cli -p adonai-supervisor --target ${{ matrix.target }}
 
-      - name: Package supervisor
+      - name: Package release
         shell: bash
         run: |
           set -euo pipefail
-          package_dir="dist/adonai-supervisor-${{ matrix.target }}"
+          package_dir="dist/adonai-${{ matrix.target }}"
           mkdir -p "$package_dir"
+          cp "target/${{ matrix.target }}/release/adonai" "$package_dir/"
           cp "target/${{ matrix.target }}/release/adonai-supervisor" "$package_dir/"
           cp README.md LICENSE "$package_dir/"
-          tar -czf "dist/${{ matrix.archive }}" -C dist "adonai-supervisor-${{ matrix.target }}"
+          cp -R docs "$package_dir/"
+          tar -czf "dist/${{ matrix.archive }}" -C dist "adonai-${{ matrix.target }}"
           if command -v shasum >/dev/null 2>&1; then
             shasum -a 256 "dist/${{ matrix.archive }}" > "dist/${{ matrix.archive }}.sha256"
           else

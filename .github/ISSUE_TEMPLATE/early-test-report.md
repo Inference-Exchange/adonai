@@ -23,8 +23,8 @@ labels: testing
 ## Commands Run
 
 ```sh
-cargo run -p adonai-supervisor
-bun run init:check
+adonai up
+adonai report
 ```
 
 ## Result
@@ -37,4 +37,4 @@ What was confusing?
 
 ## Output
 
-Paste relevant output here.
+Paste `adonai report` output here.
