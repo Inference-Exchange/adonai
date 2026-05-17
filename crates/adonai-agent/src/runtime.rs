@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    chat::{ChatCompletionRequest, ChatMessage, ChatProviderRegistry, ChatRole},
+    chat::{
+        ChatCompletionMetrics, ChatCompletionRequest, ChatMessage, ChatProviderRegistry, ChatRole,
+    },
     definition::AgentDef,
     error::{AgentError, AgentResult},
 };
@@ -17,6 +19,8 @@ pub struct RunOutcome {
     pub provider: String,
     pub model: String,
     pub final_message: ChatMessage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<ChatCompletionMetrics>,
 }
 
 pub async fn run_once(
@@ -48,6 +52,7 @@ pub async fn run_once(
         provider: response.provider,
         model: response.model,
         final_message: response.message,
+        metrics: response.metrics,
     })
 }
 

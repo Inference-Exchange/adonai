@@ -9,7 +9,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    chat::ChatMessage,
+    chat::{ChatCompletionMetrics, ChatMessage},
     definition::AgentDef,
     error::{AgentError, AgentResult},
 };
@@ -55,6 +55,8 @@ pub struct AgentRunRecord {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub final_message: Option<ChatMessage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<ChatCompletionMetrics>,
     pub error: Option<String>,
     pub created_at_ms: u128,
     pub updated_at_ms: u128,
@@ -91,6 +93,7 @@ impl RunStore {
             provider: None,
             model: None,
             final_message: None,
+            metrics: None,
             error: None,
             created_at_ms: now,
             updated_at_ms: now,
@@ -126,20 +129,26 @@ impl RunStore {
         provider: &str,
         model: &str,
         final_message: &ChatMessage,
+        metrics: Option<&ChatCompletionMetrics>,
     ) -> AgentResult<AgentRunRecord> {
         let updated_at_ms = now_ms();
         let final_message_json = serde_json::to_string(final_message)
             .map_err(|error| AgentError::InvalidDefinition(error.to_string()))?;
+        let metrics_json = metrics
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|error| AgentError::InvalidDefinition(error.to_string()))?;
         let conn = self.connection_for_write()?;
         conn.execute(
             "UPDATE agent_runs
-             SET status = ?1, provider = ?2, model = ?3, final_message_json = ?4, error = NULL, updated_at_ms = ?5
-             WHERE id = ?6",
+             SET status = ?1, provider = ?2, model = ?3, final_message_json = ?4, metrics_json = ?5, error = NULL, updated_at_ms = ?6
+             WHERE id = ?7",
             params![
                 RunStatus::Succeeded.as_str(),
                 provider,
                 model,
                 final_message_json,
+                metrics_json,
                 updated_at_ms.to_string(),
                 run_id,
             ],
@@ -180,7 +189,7 @@ impl RunStore {
         let mut statement = conn
             .prepare(
                 "SELECT id, agent_id, agent_name, goal, status, provider, model,
-                        final_message_json, error, created_at_ms, updated_at_ms
+                        final_message_json, metrics_json, error, created_at_ms, updated_at_ms
                  FROM agent_runs
                  ORDER BY created_at_ms DESC
                  LIMIT ?1",
@@ -213,7 +222,7 @@ impl RunStore {
         let record = conn
             .query_row(
                 "SELECT id, agent_id, agent_name, goal, status, provider, model,
-                        final_message_json, error, created_at_ms, updated_at_ms
+                        final_message_json, metrics_json, error, created_at_ms, updated_at_ms
                  FROM agent_runs
                  WHERE id = ?1",
                 params![run_id],
@@ -241,6 +250,7 @@ impl RunStore {
                 provider TEXT,
                 model TEXT,
                 final_message_json TEXT,
+                metrics_json TEXT,
                 error TEXT,
                 created_at_ms TEXT NOT NULL,
                 updated_at_ms TEXT NOT NULL
@@ -253,7 +263,23 @@ impl RunStore {
             path: self.db_path.clone(),
             source,
         })?;
-        Ok(())
+        self.add_metrics_column_if_missing()
+    }
+
+    fn add_metrics_column_if_missing(&self) -> AgentResult<()> {
+        let conn = self.connection_for_write()?;
+        match conn.execute("ALTER TABLE agent_runs ADD COLUMN metrics_json TEXT", []) {
+            Ok(_) => Ok(()),
+            Err(rusqlite::Error::SqliteFailure(_, Some(message)))
+                if message.contains("duplicate column name") =>
+            {
+                Ok(())
+            }
+            Err(source) => Err(AgentError::RunStoreInit {
+                path: self.db_path.clone(),
+                source,
+            }),
+        }
     }
 
     fn connection_for_open(&self) -> AgentResult<Connection> {
@@ -277,11 +303,15 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentRunRecord> {
     let final_message = final_message_json
         .as_deref()
         .and_then(|json| serde_json::from_str::<ChatMessage>(json).ok());
+    let metrics_json: Option<String> = row.get(8)?;
+    let metrics = metrics_json
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<ChatCompletionMetrics>(json).ok());
     let status_raw: String = row.get(4)?;
     let status = RunStatus::from_str(&status_raw)
         .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
-    let created_at_ms: String = row.get(9)?;
-    let updated_at_ms: String = row.get(10)?;
+    let created_at_ms: String = row.get(10)?;
+    let updated_at_ms: String = row.get(11)?;
 
     Ok(AgentRunRecord {
         id: row.get(0)?,
@@ -292,7 +322,8 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentRunRecord> {
         provider: row.get(5)?,
         model: row.get(6)?,
         final_message,
-        error: row.get(8)?,
+        metrics,
+        error: row.get(9)?,
         created_at_ms: created_at_ms.parse::<u128>().unwrap_or_default(),
         updated_at_ms: updated_at_ms.parse::<u128>().unwrap_or_default(),
     })
@@ -345,7 +376,7 @@ kind = "react"
             content: "done".to_owned(),
         };
         let updated = store
-            .mark_succeeded(&run.id, "mock", "test-model", &final_message)
+            .mark_succeeded(&run.id, "mock", "test-model", &final_message, None)
             .unwrap();
 
         assert_eq!(updated.status, RunStatus::Succeeded);

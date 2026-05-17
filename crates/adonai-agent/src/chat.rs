@@ -31,11 +31,25 @@ pub struct ChatCompletionRequest {
     pub temperature: Option<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatCompletionResponse {
     pub provider: String,
     pub model: String,
     pub message: ChatMessage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<ChatCompletionMetrics>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ChatCompletionMetrics {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_duration_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eval_duration_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokens_per_second: Option<f64>,
 }
 
 #[async_trait]
@@ -116,6 +130,7 @@ impl ChatProvider for MockChatProvider {
                 role: ChatRole::Assistant,
                 content: format!("mock response: {last_user_message}"),
             },
+            metrics: None,
         })
     }
 }
@@ -178,10 +193,13 @@ impl ChatProvider for OllamaChatProvider {
                 source,
             })?;
 
+        let metrics = response.metrics();
+
         Ok(ChatCompletionResponse {
             provider: self.id().to_owned(),
             model: request.model,
             message: response.message,
+            metrics,
         })
     }
 }
@@ -225,6 +243,44 @@ struct OllamaOptions {
 #[derive(Debug, Deserialize)]
 struct OllamaChatResponse {
     message: ChatMessage,
+    #[serde(default)]
+    total_duration: Option<u64>,
+    #[serde(default)]
+    eval_count: Option<u32>,
+    #[serde(default)]
+    eval_duration: Option<u64>,
+}
+
+impl OllamaChatResponse {
+    fn metrics(&self) -> Option<ChatCompletionMetrics> {
+        let total_duration_ms = self.total_duration.map(nanos_to_millis);
+        let eval_duration_ms = self.eval_duration.map(nanos_to_millis);
+        let tokens_per_second = match (self.eval_count, self.eval_duration) {
+            (Some(tokens), Some(duration_ns)) if duration_ns > 0 => {
+                Some(tokens as f64 / (duration_ns as f64 / 1_000_000_000.0))
+            }
+            _ => None,
+        };
+
+        if self.eval_count.is_none()
+            && total_duration_ms.is_none()
+            && eval_duration_ms.is_none()
+            && tokens_per_second.is_none()
+        {
+            return None;
+        }
+
+        Some(ChatCompletionMetrics {
+            output_tokens: self.eval_count,
+            total_duration_ms,
+            eval_duration_ms,
+            tokens_per_second,
+        })
+    }
+}
+
+fn nanos_to_millis(value: u64) -> u64 {
+    value / 1_000_000
 }
 
 fn validate_chat_request(request: &ChatCompletionRequest) -> AgentResult<()> {
@@ -282,6 +338,27 @@ mod tests {
         assert_eq!(response.model, "test-model");
         assert_eq!(response.message.role, ChatRole::Assistant);
         assert_eq!(response.message.content, "mock response: hello");
+        assert_eq!(response.metrics, None);
+    }
+
+    #[test]
+    fn ollama_response_reports_tokens_per_second() {
+        let response = OllamaChatResponse {
+            message: ChatMessage {
+                role: ChatRole::Assistant,
+                content: "done".to_owned(),
+            },
+            total_duration: Some(3_000_000_000),
+            eval_count: Some(100),
+            eval_duration: Some(2_000_000_000),
+        };
+
+        let metrics = response.metrics().expect("expected metrics");
+
+        assert_eq!(metrics.output_tokens, Some(100));
+        assert_eq!(metrics.total_duration_ms, Some(3000));
+        assert_eq!(metrics.eval_duration_ms, Some(2000));
+        assert_eq!(metrics.tokens_per_second, Some(50.0));
     }
 
     #[test]

@@ -157,6 +157,7 @@ async fn run_agent(
         &outcome.provider,
         &outcome.model,
         &outcome.final_message,
+        outcome.metrics.as_ref(),
     )?;
 
     Ok(Json(record))

@@ -382,6 +382,7 @@ async fn run_proof(context: &RuntimeContext) -> Result<AgentRunRecord, CliError>
             &outcome.provider,
             &outcome.model,
             &outcome.final_message,
+            outcome.metrics.as_ref(),
         )?),
         Err(error) => Ok(context.run_store.mark_failed(&run.id, &error.to_string())?),
     }
@@ -467,7 +468,7 @@ fn format_proof(run: AgentRunRecord) -> String {
         "Supervisor smoke"
     };
 
-    [
+    let mut lines = vec![
         proof_label.to_owned(),
         format!("Run: {}", run.id),
         format!("Status: {:?}", run.status),
@@ -477,8 +478,21 @@ fn format_proof(run: AgentRunRecord) -> String {
             option_text(run.model.as_deref(), "pending")
         ),
         format!("Message: {}", proof_message(&run)),
-    ]
-    .join("\n")
+    ];
+
+    if let Some(metrics) = &run.metrics {
+        if let Some(tokens_per_second) = metrics.tokens_per_second {
+            lines.push(format!("Speed: {:.1} tokens/sec", tokens_per_second));
+        }
+        if let Some(output_tokens) = metrics.output_tokens {
+            lines.push(format!("Output tokens: {output_tokens}"));
+        }
+        if let Some(total_duration_ms) = metrics.total_duration_ms {
+            lines.push(format!("Total duration: {total_duration_ms} ms"));
+        }
+    }
+
+    lines.join("\n")
 }
 
 fn report(context: &RuntimeContext) -> String {
@@ -546,6 +560,11 @@ fn report(context: &RuntimeContext) -> String {
             option_text(run.provider.as_deref(), "pending"),
             option_text(run.model.as_deref(), "pending")
         ));
+        if let Some(metrics) = run.metrics
+            && let Some(tokens_per_second) = metrics.tokens_per_second
+        {
+            lines.push(format!("Speed: {:.1} tokens/sec", tokens_per_second));
+        }
     } else {
         lines.push("No runs persisted yet.".to_owned());
     }

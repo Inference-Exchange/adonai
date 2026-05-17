@@ -62,6 +62,7 @@ cargo run -p adonai-cli -- report
 - installed Ollama model names when Ollama is available,
 - missing runtime pieces,
 - a proof agent run when runnable, or a clear prepare action when not runnable,
+- tokens/sec when a real Ollama proof run returns timing metadata,
 - recent persisted runs.
 
 If Ollama is installed but `llama3.2:3b` is missing, the model plan should say it is not runnable and include this next action:

@@ -30,6 +30,7 @@ Adonai exists to make that complexity disappear for users without hiding it from
 - Model planning through `POST /v1/models/plan`.
 - OpenTUI init flow that scans, explains, plans, and runs a real local proof agent when the planned Ollama model is ready.
 - SQLite-backed run history at `~/.adonai/state/runs.db`.
+- Ollama timing metrics when available, including local tokens/sec in proof output and reports.
 
 ## Quickstart
 
