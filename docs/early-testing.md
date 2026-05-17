@@ -1,6 +1,6 @@
 # Adonai Early Testing Guide
 
-Adonai is the agent OS for owned compute. The alpha should prove one thing first: a developer can install one terminal command, see what their machine can run, get an exact next action when setup is incomplete, and execute or prepare a persisted proof agent without guessing what is happening.
+Adonai is the fastest OS to run your own local models. The alpha should prove one thing first: a developer can install one terminal command, get to a real local generation quickly, see what their machine can run, get an exact next action when setup is incomplete, and execute or prepare a persisted proof agent without guessing what is happening.
 
 ## What You Can Test Now
 
@@ -33,6 +33,7 @@ Run the terminal-first CLI:
 
 ```sh
 . "$HOME/.cargo/env"
+cargo run -p adonai-cli -- run
 cargo run -p adonai-cli -- up
 ```
 

@@ -1,16 +1,16 @@
 # Adonai
 
-The agent OS for owned compute.
+The fastest OS to run your own local models.
 
-Adonai is an open-source operating layer for running models and sovereign agents on hardware you own. It is not another chat app, model registry, or thin Ollama wrapper. The bet is that local inference should feel like an operating system: clear hardware status, honest model planning, safe local defaults, durable agents, and engine complexity hidden behind a supervisor.
+Adonai is an open-source operating layer for running local models and sovereign agents on hardware you own. It is not another chat app, model registry, or thin Ollama wrapper. The bet is that local inference should feel instant to start and understandable to operate: fast model setup, clear hardware status, honest model planning, safe local defaults, durable agents, and engine complexity hidden behind a supervisor.
 
 The current alpha is the foundation: a Rust `adonai` CLI, a local-only supervisor API, an OpenTUI onboarding flow, hardware and inference-engine detection, model planning, and persisted agent runs.
 
 ## Why Adonai Exists
 
-Running local AI is still too hard. A useful model is not a single executable. It is weights, config, tokenizer files, quantization formats, memory constraints, accelerator quirks, runtime choices, process management, logs, and security boundaries.
+Running local AI is still too slow to start. A useful model is not a single executable. It is weights, config, tokenizer files, quantization formats, memory constraints, accelerator quirks, runtime choices, process management, logs, and security boundaries.
 
-Adonai exists to make that complexity disappear for users without hiding it from operators. It should tell you:
+Adonai exists to make that complexity disappear for users without hiding it from operators. It should get you to a real local generation quickly, then tell you:
 
 - what hardware you own,
 - what engines are available,
@@ -36,7 +36,7 @@ Adonai exists to make that complexity disappear for users without hiding it from
 From a release artifact:
 
 ```sh
-adonai up
+adonai run
 ```
 
 From source:
@@ -60,6 +60,7 @@ For the terminal-first CLI:
 
 ```sh
 cargo run -p adonai-cli -- up
+cargo run -p adonai-cli -- run
 cargo run -p adonai-cli -- doctor
 cargo run -p adonai-cli -- run proof
 cargo run -p adonai-cli -- report

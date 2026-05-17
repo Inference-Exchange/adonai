@@ -24,6 +24,7 @@ pub enum CliError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Command {
     Help,
+    Run,
     Up,
     Status,
     Doctor,
@@ -42,6 +43,7 @@ pub async fn run_cli(args: impl IntoIterator<Item = String>) -> Result<String, C
 
     match command {
         Command::Help => Ok(help_text()),
+        Command::Run => run(&context).await,
         Command::Up => up(&context).await,
         Command::Status => Ok(status(&context)),
         Command::Doctor => Ok(doctor(&context)),
@@ -56,6 +58,7 @@ fn parse_command(args: impl IntoIterator<Item = String>) -> Result<Command, CliE
 
     match args.as_slice() {
         [] => Ok(Command::Up),
+        [first] if first == "run" => Ok(Command::Run),
         [first] if first == "up" => Ok(Command::Up),
         [first] if first == "status" => Ok(Command::Status),
         [first] if first == "doctor" => Ok(Command::Doctor),
@@ -99,10 +102,32 @@ impl RuntimeContext {
     }
 }
 
+async fn run(context: &RuntimeContext) -> Result<String, CliError> {
+    let mut lines = vec![
+        "Adonai run".to_owned(),
+        "The fastest OS to run your own local models.".to_owned(),
+        String::new(),
+        status(context),
+        String::new(),
+        doctor(context),
+    ];
+
+    if context.model_plan.runnable_now {
+        lines.push(String::new());
+        lines.push(format_proof(run_proof(context).await?));
+    } else {
+        lines.push(String::new());
+        lines.push("Local generation is not ready yet.".to_owned());
+        lines.push("Run `adonai prepare` for the next setup action.".to_owned());
+    }
+
+    Ok(lines.join("\n"))
+}
+
 async fn up(context: &RuntimeContext) -> Result<String, CliError> {
     let mut lines = vec![
         "Adonai up".to_owned(),
-        "Terminal OS for owned AI compute".to_owned(),
+        "The fastest OS to run your own local models.".to_owned(),
         String::new(),
         status(context),
         String::new(),
@@ -476,9 +501,11 @@ fn yes_no(value: bool) -> &'static str {
 
 fn help_text() -> String {
     [
-        "Adonai terminal OS",
+        "Adonai",
+        "The fastest OS to run your own local models.",
         "",
         "Usage:",
+        "  adonai run",
         "  adonai up",
         "  adonai status",
         "  adonai doctor",
@@ -505,6 +532,7 @@ mod tests {
 
     #[test]
     fn parses_run_proof_command() {
+        assert_eq!(parse_command(["run".to_owned()]).ok(), Some(Command::Run));
         assert_eq!(
             parse_command(["run".to_owned(), "proof".to_owned()]).ok(),
             Some(Command::RunProof)

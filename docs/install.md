@@ -1,6 +1,6 @@
 # Installing Adonai
 
-Adonai is currently a terminal-first alpha for macOS and Linux. The public entrypoint is the `adonai` CLI.
+Adonai is currently a terminal-first alpha for macOS and Linux. The public entrypoint is the `adonai` CLI, built around the product promise: the fastest OS to run your own local models.
 
 ## Release Install
 
@@ -37,6 +37,7 @@ cargo run -p adonai-cli -- up
 ## First Commands
 
 ```sh
+adonai run
 adonai up
 adonai status
 adonai doctor
@@ -45,7 +46,7 @@ adonai run proof
 adonai report
 ```
 
-`adonai up` is the main first-run command. It scans the machine, checks local AI readiness, and either gives a concrete next action or confirms a local proof path.
+`adonai run` is the main first-run command. It should become the fastest path from a fresh machine to a real local generation. In the current alpha it scans the machine, checks local AI readiness, and either gives a concrete next action or confirms a local proof path. `adonai up` remains the lower-level status and doctor flow.
 
 ## Ollama Path
 
