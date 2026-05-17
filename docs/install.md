@@ -15,7 +15,7 @@ Then unpack and run:
 ```sh
 tar -xzf adonai-aarch64-apple-darwin.tar.gz
 cd adonai-aarch64-apple-darwin
-./adonai up
+./adonai run
 ```
 
 Replace the archive and directory names with the artifact for your platform.
@@ -38,6 +38,7 @@ cargo run -p adonai-cli -- up
 
 ```sh
 adonai run
+adonai run --yes
 adonai up
 adonai status
 adonai doctor
@@ -46,7 +47,7 @@ adonai run proof
 adonai report
 ```
 
-`adonai run` is the main first-run command. It should become the fastest path from a fresh machine to a real local generation. In the current alpha it scans the machine, checks local AI readiness, and either gives a concrete next action or confirms a local proof path. `adonai up` remains the lower-level status and doctor flow.
+`adonai run` is the main first-run command. It should become the fastest path from a fresh machine to a real local generation. In the current alpha it scans the machine, checks local AI readiness, and either gives a concrete next action or confirms a local proof path. `adonai run --yes` lets Adonai apply supported setup actions such as starting Ollama or pulling the selected model. `adonai up` remains the lower-level status and doctor flow.
 
 ## Ollama Path
 

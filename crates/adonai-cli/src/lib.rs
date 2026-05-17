@@ -1,11 +1,17 @@
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::PathBuf,
+    process::{Command as ProcessCommand, Stdio},
+    thread,
+    time::Duration,
+};
 
 use adonai_agent::{
     AgentDef, AgentError, AgentRunRecord, ChatProviderRegistry, RunInput, RunStore, run_once,
 };
 use adonai_core::{
-    BindAddress, EndpointPolicy, ModelArtifact, ModelPlanRequest, ModelRunPlan, SupervisorSnapshot,
-    plan_model_run,
+    BindAddress, EndpointPolicy, ModelArtifact, ModelPlanAction, ModelPlanActionKind,
+    ModelPlanRequest, ModelRunPlan, SupervisorSnapshot, plan_model_run,
 };
 use thiserror::Error;
 
@@ -19,16 +25,19 @@ pub enum CliError {
 
     #[error(transparent)]
     Agent(#[from] AgentError),
+
+    #[error("preparation failed: {0}")]
+    Preparation(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Command {
     Help,
-    Run,
+    Run { apply: bool },
     Up,
     Status,
     Doctor,
-    Prepare,
+    Prepare { apply: bool },
     RunProof,
     Report,
 }
@@ -43,11 +52,11 @@ pub async fn run_cli(args: impl IntoIterator<Item = String>) -> Result<String, C
 
     match command {
         Command::Help => Ok(help_text()),
-        Command::Run => run(&context).await,
+        Command::Run { apply } => run(&context, apply).await,
         Command::Up => up(&context).await,
         Command::Status => Ok(status(&context)),
         Command::Doctor => Ok(doctor(&context)),
-        Command::Prepare => Ok(prepare(&context)),
+        Command::Prepare { apply } => prepare(&context, apply),
         Command::RunProof => run_proof(&context).await.map(format_proof),
         Command::Report => Ok(report(&context)),
     }
@@ -58,11 +67,17 @@ fn parse_command(args: impl IntoIterator<Item = String>) -> Result<Command, CliE
 
     match args.as_slice() {
         [] => Ok(Command::Up),
-        [first] if first == "run" => Ok(Command::Run),
+        [first] if first == "run" => Ok(Command::Run { apply: false }),
+        [first, second] if first == "run" && is_apply_flag(second) => {
+            Ok(Command::Run { apply: true })
+        }
         [first] if first == "up" => Ok(Command::Up),
         [first] if first == "status" => Ok(Command::Status),
         [first] if first == "doctor" => Ok(Command::Doctor),
-        [first] if first == "prepare" => Ok(Command::Prepare),
+        [first] if first == "prepare" => Ok(Command::Prepare { apply: false }),
+        [first, second] if first == "prepare" && is_apply_flag(second) => {
+            Ok(Command::Prepare { apply: true })
+        }
         [first] if first == "report" => Ok(Command::Report),
         [first, second] if first == "run" && second == "proof" => Ok(Command::RunProof),
         [first] if first == "--help" || first == "-h" || first == "help" => Ok(Command::Help),
@@ -102,7 +117,11 @@ impl RuntimeContext {
     }
 }
 
-async fn run(context: &RuntimeContext) -> Result<String, CliError> {
+fn is_apply_flag(value: &str) -> bool {
+    matches!(value, "--apply" | "--yes" | "-y")
+}
+
+async fn run(context: &RuntimeContext, apply: bool) -> Result<String, CliError> {
     let mut lines = vec![
         "Adonai run".to_owned(),
         "The fastest OS to run your own local models.".to_owned(),
@@ -116,9 +135,34 @@ async fn run(context: &RuntimeContext) -> Result<String, CliError> {
         lines.push(String::new());
         lines.push(format_proof(run_proof(context).await?));
     } else {
+        let refreshed_context;
+        let active_context = if apply {
+            lines.push(String::new());
+            lines.push(prepare(context, true)?);
+            refreshed_context = RuntimeContext::collect()?;
+            &refreshed_context
+        } else {
+            context
+        };
+
         lines.push(String::new());
-        lines.push("Local generation is not ready yet.".to_owned());
-        lines.push("Run `adonai prepare` for the next setup action.".to_owned());
+        if active_context.model_plan.runnable_now {
+            lines.push("Local generation is ready.".to_owned());
+            lines.push(format_proof(run_proof(active_context).await?));
+        } else {
+            lines.push("Local generation is not ready yet.".to_owned());
+            if apply {
+                lines.push(
+                    "Adonai applied every supported setup action it can run safely.".to_owned(),
+                );
+            } else {
+                lines.push(
+                    "Run `adonai run --yes` to let Adonai apply supported setup actions."
+                        .to_owned(),
+                );
+            }
+            lines.push("Run `adonai prepare` to inspect the exact next action.".to_owned());
+        }
     }
 
     Ok(lines.join("\n"))
@@ -228,14 +272,14 @@ fn doctor(context: &RuntimeContext) -> String {
     lines.join("\n")
 }
 
-fn prepare(context: &RuntimeContext) -> String {
+fn prepare(context: &RuntimeContext, apply: bool) -> Result<String, CliError> {
     let plan = &context.model_plan;
     let mut lines = vec!["Prepare".to_owned()];
 
     if plan.runnable_now {
         lines.push(format!("{} is ready to run locally.", plan.model));
-        lines.push("Run `adonai run proof`.".to_owned());
-        return lines.join("\n");
+        lines.push("Run `adonai run`.".to_owned());
+        return Ok(lines.join("\n"));
     }
 
     if plan.next_actions.is_empty() {
@@ -244,19 +288,86 @@ fn prepare(context: &RuntimeContext) -> String {
             "Adonai will not install engines or download models without explicit support."
                 .to_owned(),
         );
-        return lines.join("\n");
+        return Ok(lines.join("\n"));
     }
 
-    lines.push("Run the next action, then run `adonai up` again.".to_owned());
-    for action in &plan.next_actions {
-        lines.push(format!("- {}", action.label));
-        if let Some(command) = &action.command {
-            lines.push(format!("  {command}"));
+    if apply {
+        lines.push("Applying supported setup actions.".to_owned());
+        for action in &plan.next_actions {
+            lines.extend(apply_prepare_action(action, &plan.model)?);
         }
-        lines.push(format!("  {}", action.reason));
+    } else {
+        lines.push("Run the next action, then run `adonai run` again.".to_owned());
+        lines.push(
+            "Or run `adonai prepare --apply` to let Adonai run supported setup actions.".to_owned(),
+        );
+        for action in &plan.next_actions {
+            lines.push(format!("- {}", action.label));
+            if let Some(command) = &action.command {
+                lines.push(format!("  {command}"));
+            }
+            lines.push(format!("  {}", action.reason));
+        }
     }
 
-    lines.join("\n")
+    Ok(lines.join("\n"))
+}
+
+fn apply_prepare_action(action: &ModelPlanAction, model: &str) -> Result<Vec<String>, CliError> {
+    match action.kind {
+        ModelPlanActionKind::StartEngine if action.command.as_deref() == Some("ollama serve") => {
+            start_ollama()
+        }
+        ModelPlanActionKind::StartEngine => Ok(vec![
+            format!("- {}: manual start required", action.label),
+            format!("  {}", action.reason),
+        ]),
+        ModelPlanActionKind::PullModel => pull_ollama_model(model),
+        ModelPlanActionKind::InstallEngine => Ok(vec![
+            format!("- {}: manual step required", action.label),
+            "  Adonai does not install inference engines yet.".to_owned(),
+        ]),
+        ModelPlanActionKind::SelectSupportedModel => Ok(vec![
+            format!("- {}: manual selection required", action.label),
+            format!("  {}", action.reason),
+        ]),
+    }
+}
+
+fn start_ollama() -> Result<Vec<String>, CliError> {
+    ProcessCommand::new("ollama")
+        .arg("serve")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|error| CliError::Preparation(format!("could not start Ollama: {error}")))?;
+
+    thread::sleep(Duration::from_secs(2));
+
+    Ok(vec![
+        "- Start Ollama: ollama serve".to_owned(),
+        "  Started in the background; Adonai will re-check readiness.".to_owned(),
+    ])
+}
+
+fn pull_ollama_model(model: &str) -> Result<Vec<String>, CliError> {
+    let status = ProcessCommand::new("ollama")
+        .arg("pull")
+        .arg(model)
+        .status()
+        .map_err(|error| CliError::Preparation(format!("could not pull {model}: {error}")))?;
+
+    if !status.success() {
+        return Err(CliError::Preparation(format!(
+            "`ollama pull {model}` exited with {status}"
+        )));
+    }
+
+    Ok(vec![
+        format!("- Pull {model}: ollama pull {model}"),
+        "  Model pull completed; Adonai will re-check readiness.".to_owned(),
+    ])
 }
 
 async fn run_proof(context: &RuntimeContext) -> Result<AgentRunRecord, CliError> {
@@ -506,10 +617,12 @@ fn help_text() -> String {
         "",
         "Usage:",
         "  adonai run",
+        "  adonai run --yes",
         "  adonai up",
         "  adonai status",
         "  adonai doctor",
         "  adonai prepare",
+        "  adonai prepare --apply",
         "  adonai run proof",
         "  adonai report",
         "",
@@ -532,10 +645,29 @@ mod tests {
 
     #[test]
     fn parses_run_proof_command() {
-        assert_eq!(parse_command(["run".to_owned()]).ok(), Some(Command::Run));
+        assert_eq!(
+            parse_command(["run".to_owned()]).ok(),
+            Some(Command::Run { apply: false })
+        );
+        assert_eq!(
+            parse_command(["run".to_owned(), "--yes".to_owned()]).ok(),
+            Some(Command::Run { apply: true })
+        );
         assert_eq!(
             parse_command(["run".to_owned(), "proof".to_owned()]).ok(),
             Some(Command::RunProof)
+        );
+    }
+
+    #[test]
+    fn parses_prepare_apply_command() {
+        assert_eq!(
+            parse_command(["prepare".to_owned()]).ok(),
+            Some(Command::Prepare { apply: false })
+        );
+        assert_eq!(
+            parse_command(["prepare".to_owned(), "--apply".to_owned()]).ok(),
+            Some(Command::Prepare { apply: true })
         );
     }
 

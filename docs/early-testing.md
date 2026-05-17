@@ -5,6 +5,7 @@ Adonai is the fastest OS to run your own local models. The alpha should prove on
 ## What You Can Test Now
 
 - Run `adonai up`.
+- Run `adonai run` and inspect whether it gives a real local generation or the exact setup action.
 - Inspect hardware and network exposure.
 - Probe installed inference engines: Ollama, llama.cpp, MLX, vLLM, and SGLang.
 - Ask Adonai to plan a model run for `llama3.2:3b`.
@@ -34,6 +35,7 @@ Run the terminal-first CLI:
 ```sh
 . "$HOME/.cargo/env"
 cargo run -p adonai-cli -- run
+cargo run -p adonai-cli -- run --yes
 cargo run -p adonai-cli -- up
 ```
 

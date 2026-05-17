@@ -23,7 +23,7 @@ Adonai exists to make that complexity disappear for users without hiding it from
 ## What Works Today
 
 - Local-only supervisor API on `127.0.0.1`.
-- Rust CLI entrypoint with `adonai up`, `adonai status`, `adonai doctor`, `adonai prepare`, `adonai run proof`, and `adonai report`.
+- Rust CLI entrypoint with `adonai run`, `adonai up`, `adonai status`, `adonai doctor`, `adonai prepare`, `adonai run proof`, and `adonai report`.
 - Hardware profile for OS, CPU, memory, storage, network exposure, and Apple Metal hints.
 - Engine adapter detection for Ollama, llama.cpp, MLX, vLLM, and SGLang.
 - Ollama readiness detection for binary, local API availability, and installed model names.
@@ -61,6 +61,7 @@ For the terminal-first CLI:
 ```sh
 cargo run -p adonai-cli -- up
 cargo run -p adonai-cli -- run
+cargo run -p adonai-cli -- run --yes
 cargo run -p adonai-cli -- doctor
 cargo run -p adonai-cli -- run proof
 cargo run -p adonai-cli -- report
@@ -131,7 +132,7 @@ The init flow uses `llama3.2:3b` by default. Override this with:
 ADONAI_STARTER_MODEL=qwen2.5:7b bun run init
 ```
 
-If Ollama is installed but the starter model is missing, Adonai reports the model as not runnable and shows the required `ollama pull` next action. If Ollama's local API is unavailable, Adonai shows `ollama serve` as the next action and falls back to a deterministic supervisor smoke run instead of pretending local inference worked.
+If Ollama is installed but the starter model is missing, Adonai reports the model as not runnable and shows the required `ollama pull` next action. If Ollama's local API is unavailable, Adonai shows `ollama serve` as the next action and falls back to a deterministic supervisor smoke run instead of pretending local inference worked. `adonai run --yes` and `adonai prepare --apply` may run supported setup actions such as `ollama serve` or `ollama pull`, but Adonai does not install engines without an explicit supported path.
 
 ## Architecture
 
